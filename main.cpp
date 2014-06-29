@@ -22,6 +22,10 @@
 #define PREVIEW_WIDTH 640
 #define PREVIEW_HEIGHT 360
 
+#ifndef AV_ERROR_MAX_STRING_SIZE
+#define AV_ERROR_MAX_STRING_SIZE 64
+#endif
+
 // initialize the application
 IMPLEMENT_APP(MainApp);
 
@@ -238,7 +242,7 @@ void MainFrame::Preview(){
 		return;
 	}
 
-	AVFrame *fr = av_frame_alloc();
+	AVFrame *fr = avcodec_alloc_frame();
 	if (!fr){
 		*tcLog << "Cannot allocate frame\n";
 		avcodec_close(previewedStream->codec);
