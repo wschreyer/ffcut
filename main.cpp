@@ -18,6 +18,7 @@
 #include <iomanip>
 
 #include "wx/stdpaths.h"
+#include "wx/dnd.h"
 
 #define PREVIEW_WIDTH 640
 #define PREVIEW_HEIGHT 360
@@ -63,9 +64,31 @@ void av_log_callback(void* ptr, int level, const char* fmt, va_list vl)
 // main application frame implementation 
 ////////////////////////////////////////////////////////////////////////////////
 
+class MyDropTarget: public wxFileDropTarget{
+	wxFilePickerCtrl *owner;
+	
+public:
+	MyDropTarget(wxFilePickerCtrl *aowner){
+		owner = aowner;
+	}
+	
+	bool OnDropFiles(wxCoord x,	wxCoord	y, const wxArrayString &filenames){
+		if (filenames.size() == 1){
+			owner->SetPath(filenames[0]);
+			wxFileDirPickerEvent ev(wxEVT_COMMAND_FILEPICKER_CHANGED, owner, owner->GetId(), filenames[0]);
+			owner->GetEventHandler()->ProcessEvent(ev);
+			return true;
+		}
+		return false;
+	}
+};
+
 MainFrame::MainFrame(wxWindow *parent) : MainFrameBase( parent )
 {
 	av_register_all();	
+	
+	MyDropTarget *dt = new MyDropTarget(fpIn);
+	SetDropTarget(&(*dt));
 
 	if (SDL_Init(SDL_INIT_VIDEO) < 0)
 		*tcLog << "Could not init video\n";
@@ -173,14 +196,14 @@ int MainFrame::NextPacket(int stream_index, AVPacket *pkt, int flags){
 			char errbuf[AV_ERROR_MAX_STRING_SIZE];
 			av_strerror(ret, errbuf, AV_ERROR_MAX_STRING_SIZE);
 			*tcLog << "Cannot read frame: " << errbuf << '\n';
-			av_free_packet(pkt);
+			av_packet_unref(pkt);
 			return ret;
 		}
 		if (pkt->stream_index == stream_index){
 			if (!flags || (pkt->flags & flags))
 				return ret;
 		}
-		av_free_packet(pkt);
+		av_packet_unref(pkt);
 	}
 }
 
@@ -230,7 +253,7 @@ void MainFrame::Preview(){
 	AVCodec *c = avcodec_find_decoder(previewedStream->codec->codec_id);
 	if (!c){
 		*tcLog << "Decoder not found\n";
-		av_free_packet(&pkt);
+		av_packet_unref(&pkt);
 		return;
 	}
 	ret = avcodec_open2(previewedStream->codec, c, NULL);
@@ -238,15 +261,15 @@ void MainFrame::Preview(){
 		char errbuf[AV_ERROR_MAX_STRING_SIZE];
 		av_strerror(ret, errbuf, AV_ERROR_MAX_STRING_SIZE);
 		*tcLog << "Could not open decoder: " << errbuf << '\n';
-		av_free_packet(&pkt);
+		av_packet_unref(&pkt);
 		return;
 	}
 
-	AVFrame *fr = avcodec_alloc_frame();
+	AVFrame *fr = av_frame_alloc();
 	if (!fr){
 		*tcLog << "Cannot allocate frame\n";
 		avcodec_close(previewedStream->codec);
-		av_free_packet(&pkt);
+		av_packet_unref(&pkt);
 		return;
 	}
 
@@ -263,27 +286,30 @@ void MainFrame::Preview(){
 			*tcLog << "Cannot decode video: " << errbuf << '\n';
 			break;
 		}
-		av_free_packet(&pkt);
+		av_packet_unref(&pkt);
 		
 		if (pic){
 			uint8_t *pixels[4];
 			int linesizes[4];
-			ret = av_image_alloc(pixels, linesizes, PREVIEW_WIDTH, PREVIEW_HEIGHT, AV_PIX_FMT_YUV420P, 1);
+			ret = av_image_alloc(pixels, linesizes, PREVIEW_WIDTH, PREVIEW_HEIGHT, AV_PIX_FMT_YUV420P, 16);
 			if (ret < 0){
 				char errbuf[AV_ERROR_MAX_STRING_SIZE];
 				av_strerror(ret, errbuf, AV_ERROR_MAX_STRING_SIZE);
 				*tcLog << "Cannot allocate pic buffer: " << errbuf << '\n';
 				break;
 			}
-			SwsContext *sc = sws_getContext(fr->width, fr->height, (PixelFormat)fr->format, PREVIEW_WIDTH, PREVIEW_HEIGHT, AV_PIX_FMT_YUV420P, SWS_BILINEAR, NULL, NULL, NULL);
-			sws_scale(sc, fr->data, fr->linesize, 0, fr->width, pixels, linesizes);
-			ret = SDL_UpdateYUVTexture(texture, NULL, pixels[0], linesizes[0], pixels[1], linesizes[1], pixels[2], linesizes[2]);
-			if (ret < 0);
-				*tcLog << SDL_GetError();
-			SDL_RenderClear(renderer);
-			SDL_RenderCopy(renderer, texture, NULL, NULL);
-			SDL_RenderPresent(renderer);
-			av_free(sc);
+			SwsContext *sc = sws_getContext(fr->width, fr->height, (AVPixelFormat)fr->format, PREVIEW_WIDTH, PREVIEW_HEIGHT, AV_PIX_FMT_YUV420P, SWS_BILINEAR, NULL, NULL, NULL);
+			if (sc){
+				sws_scale(sc, fr->data, fr->linesize, 0, fr->height, pixels, linesizes);
+				ret = SDL_UpdateYUVTexture(texture, NULL, pixels[0], linesizes[0], pixels[1], linesizes[1], pixels[2], linesizes[2]);
+	//			ret = SDL_UpdateYUVTexture(texture, NULL, fr->data[0], fr->linesize[0], fr->data[1], fr->linesize[1], fr->data[2], fr->linesize[2]);
+				if (ret < 0);
+					*tcLog << SDL_GetError();
+				SDL_RenderClear(renderer);
+				SDL_RenderCopy(renderer, texture, NULL, NULL);
+				SDL_RenderPresent(renderer);
+				sws_freeContext(sc);
+			}
 			av_freep(&pixels[0]);
 /*			
 			if (NextPacket(previewedStream->index, &pkt, AV_PKT_FLAG_KEY) >= 0){
@@ -300,7 +326,7 @@ void MainFrame::Preview(){
 	}
 	av_free(fr);
 	avcodec_close(previewedStream->codec);
-	av_free_packet(&pkt);
+	av_packet_unref(&pkt);
 }
 
 void MainFrame::Seek(int64_t bytepos, wxTimeSpan timepos){
@@ -328,7 +354,7 @@ void MainFrame::Seek(int64_t bytepos, wxTimeSpan timepos){
 }
 
 
-void MainFrame::fpInOnFileChanged(wxFileDirPickerEvent& event)
+void MainFrame::OnFpinFilepickerChanged(wxFileDirPickerEvent& event)
 {
 	tcLog->Clear();
 	
@@ -390,7 +416,7 @@ void MainFrame::btROnButtonClick(wxCommandEvent& event)
 		if (NextPacket(previewedStream->index, &pkt, AV_PKT_FLAG_KEY) >= 0){
 			if (PTStoWXTime(pkt.pts, previewedStream->time_base) < previewedPTS){
 				if (lastpkt.size > 0)
-					av_free_packet(&lastpkt);
+					av_packet_unref(&lastpkt);
 				lastpkt = pkt;
 			}
 			else if (PTStoWXTime(pkt.pts, previewedStream->time_base) == previewedPTS && lastpkt.size > 0){
@@ -405,9 +431,9 @@ void MainFrame::btROnButtonClick(wxCommandEvent& event)
 		}
 	}
 	if (pkt.size > 0)
-		av_free_packet(&pkt);
+		av_packet_unref(&pkt);
 	if (lastpkt.size > 0)
-		av_free_packet(&lastpkt);
+		av_packet_unref(&lastpkt);
 }
 
 void MainFrame::btRROnButtonClick(wxCommandEvent& event)
@@ -422,7 +448,7 @@ void MainFrame::btRRROnButtonClick(wxCommandEvent& event)
 	Preview();
 }
 
-void MainFrame::sdPositionOnScroll(wxScrollEvent& event)
+void MainFrame::OnSdpositionScrollChanged(wxScrollEvent& event)
 {
 	Seek(avio_size(fc->pb)*sdPosition->GetValue()/sdPosition->GetMax(), 
 			previewedStream->start_time + previewedStream->duration*sdPosition->GetValue()/sdPosition->GetMax());
@@ -514,10 +540,10 @@ void MainFrame::btScanOnButtonClick(wxCommandEvent& event)
 		if (pkt.pos > 0)
 			lastpos[pkt.stream_index] = pkt.pos;
 
-		av_free_packet(&pkt);
+		av_packet_unref(&pkt);
 	}
 	
-	av_free_packet(&pkt);
+	av_packet_unref(&pkt);
 	
 	av_log_set_callback(&av_log_default_callback);	
 		
@@ -606,3 +632,25 @@ void MainFrame::sbStreamorderOnSpin( wxSpinEvent& event ){
 	sbStreamorder->SetValue(0);
 }
 
+void MainFrame::OnKeyDown(wxKeyEvent& event)
+{
+	wxCommandEvent ev(wxEVT_BUTTON);
+	int key = event.GetKeyCode();
+	int mod = event.GetModifiers();
+	if (key == WXK_RIGHT){
+		if (mod == wxMOD_NONE)
+			btFOnButtonClick(ev);
+		else if (mod == wxMOD_SHIFT)
+			btFFOnButtonClick(ev);
+		else if (mod == wxMOD_CONTROL)
+			btFFFOnButtonClick(ev);
+	}
+	else if (key == WXK_LEFT){
+		if (mod == wxMOD_NONE)
+			btROnButtonClick(ev);
+		else if (mod == wxMOD_SHIFT)
+			btRROnButtonClick(ev);
+		else if (mod == wxMOD_CONTROL)
+			btRRROnButtonClick(ev);
+	}
+}

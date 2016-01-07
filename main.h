@@ -27,7 +27,7 @@ extern "C" {
 #include "libswscale/swscale.h"
 #include "libavutil/imgutils.h"
 
-#include "SDL2/SDL.h"
+#include "SDL.h"
 }
 
 
@@ -68,11 +68,11 @@ class MainFrame : public MainFrameBase
 		virtual void OnCloseFrame( wxCloseEvent& event );
 		virtual void OnExitClick( wxCommandEvent& event );
 		
-		void fpInOnFileChanged( wxFileDirPickerEvent& event );
+		void OnFpinFilepickerChanged( wxFileDirPickerEvent& event );
 		void btFOnButtonClick( wxCommandEvent& event );
 		void btFFOnButtonClick( wxCommandEvent& event );
 		void btFFFOnButtonClick( wxCommandEvent& event );
-		void sdPositionOnScroll( wxScrollEvent& event );
+		void OnSdpositionScrollChanged( wxScrollEvent& event );
 		void btRRROnButtonClick( wxCommandEvent& event );
 		void btRROnButtonClick( wxCommandEvent& event );
 		void btROnButtonClick( wxCommandEvent& event );
@@ -82,6 +82,7 @@ class MainFrame : public MainFrameBase
 		void btRemoveCutOnButtonClick( wxCommandEvent& event );
 		void cbCutsOnCombobox(wxCommandEvent& event);
 		void sbStreamorderOnSpin( wxSpinEvent& event );
+		void OnKeyDown(wxKeyEvent& event);
 		
 		void Scan();
 		void Preview();
