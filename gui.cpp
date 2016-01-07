@@ -26,6 +26,10 @@ MainFrameBase::MainFrameBase(wxWindow* parent, wxWindowID id, const wxString& ti
     wxBoxSizer* szMain = new wxBoxSizer(wxVERTICAL);
     this->SetSizer(szMain);
     
+    bmpPreview = new wxStaticBitmap(this, wxID_ANY, wxNullBitmap, wxDefaultPosition, wxSize(-1,-1), 0 );
+    
+    szMain->Add(bmpPreview, 2, wxALL|wxEXPAND, 5);
+    
     tcLog = new wxTextCtrl(this, wxID_ANY, wxT(""), wxDefaultPosition, wxSize(-1, -1), wxTE_READONLY|wxTE_MULTILINE);
     
     szMain->Add(tcLog, 1, wxALL|wxEXPAND, 5);
@@ -159,7 +163,7 @@ MainFrameBase::MainFrameBase(wxWindow* parent, wxWindowID id, const wxString& ti
     SetBackgroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_BTNFACE));
     SetForegroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOW));
     SetName(wxT("MainFrameBase"));
-    SetSize(500,500);
+    SetSize(600,750);
     if (GetSizer()) {
          GetSizer()->Fit(this);
     }

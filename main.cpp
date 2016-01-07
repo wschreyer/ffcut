@@ -19,14 +19,11 @@
 
 #include "wx/stdpaths.h"
 #include "wx/dnd.h"
-
-#define PREVIEW_WIDTH 640
-#define PREVIEW_HEIGHT 360
-
+/*
 #ifndef AV_ERROR_MAX_STRING_SIZE
 #define AV_ERROR_MAX_STRING_SIZE 64
 #endif
-
+*/
 // initialize the application
 IMPLEMENT_APP(MainApp);
 
@@ -90,24 +87,12 @@ MainFrame::MainFrame(wxWindow *parent) : MainFrameBase( parent )
 	MyDropTarget *dt = new MyDropTarget(fpIn);
 	SetDropTarget(&(*dt));
 
-	if (SDL_Init(SDL_INIT_VIDEO) < 0)
-		*tcLog << "Could not init video\n";
-	window = NULL;
-	renderer = NULL;
-	texture = NULL;
 }
 
 MainFrame::~MainFrame()
 {
 	if (fc)
 		avformat_close_input(&fc);
-	if (texture)
-		SDL_DestroyTexture(texture);
-	if (renderer)
-		SDL_DestroyRenderer(renderer);
-	if (window)
-		SDL_DestroyWindow(window);
-	SDL_Quit();
 }
 
 void MainFrame::OnCloseFrame(wxCloseEvent& event)
@@ -164,27 +149,6 @@ void MainFrame::Scan(){
 //	if (fc->iformat->priv_class)
 //		clStreams->AppendString(fc->iformat->priv_class->class_name);
 		
-	if (texture)
-		SDL_DestroyTexture(texture);
-	if (renderer)
-		SDL_DestroyRenderer(renderer);
-	if (window)
-		SDL_DestroyWindow(window);
-		
-	int x,y;
-	GetScreenPosition(&x, &y);
-	y -= PREVIEW_HEIGHT + 30;
-	if (y < 0)
-		y = 30;
-	window = SDL_CreateWindow("ffcut Preview", x, y, PREVIEW_WIDTH, PREVIEW_HEIGHT, 0);
-	if (!window)
-		*tcLog << "Could not create preview window: " << SDL_GetError();
-	renderer = SDL_CreateRenderer(window, -1, 0);
-	if (!renderer)
-		*tcLog << "Could not create preview renderer: " << SDL_GetError();
-	texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_IYUV, SDL_TEXTUREACCESS_STATIC, PREVIEW_WIDTH, PREVIEW_HEIGHT);
-	if (!texture)
-		*tcLog << "Could not create preview texture: " << SDL_GetError();		
 }
 
 int MainFrame::NextPacket(int stream_index, AVPacket *pkt, int flags){
@@ -291,24 +255,23 @@ void MainFrame::Preview(){
 		if (pic){
 			uint8_t *pixels[4];
 			int linesizes[4];
-			ret = av_image_alloc(pixels, linesizes, PREVIEW_WIDTH, PREVIEW_HEIGHT, AV_PIX_FMT_YUV420P, 16);
+			wxSize previewsize = bmpPreview->GetSize();
+			ret = av_image_alloc(pixels, linesizes, previewsize.GetWidth(), previewsize.GetHeight(), AV_PIX_FMT_RGB24, 1);
 			if (ret < 0){
 				char errbuf[AV_ERROR_MAX_STRING_SIZE];
 				av_strerror(ret, errbuf, AV_ERROR_MAX_STRING_SIZE);
 				*tcLog << "Cannot allocate pic buffer: " << errbuf << '\n';
 				break;
 			}
-			SwsContext *sc = sws_getContext(fr->width, fr->height, (AVPixelFormat)fr->format, PREVIEW_WIDTH, PREVIEW_HEIGHT, AV_PIX_FMT_YUV420P, SWS_BILINEAR, NULL, NULL, NULL);
+			SwsContext *sc = sws_getContext(fr->width, fr->height, (AVPixelFormat)fr->format, previewsize.GetWidth(), previewsize.GetHeight(), AV_PIX_FMT_RGB24, SWS_BILINEAR, NULL, NULL, NULL);
 			if (sc){
-				sws_scale(sc, fr->data, fr->linesize, 0, fr->height, pixels, linesizes);
-				ret = SDL_UpdateYUVTexture(texture, NULL, pixels[0], linesizes[0], pixels[1], linesizes[1], pixels[2], linesizes[2]);
-	//			ret = SDL_UpdateYUVTexture(texture, NULL, fr->data[0], fr->linesize[0], fr->data[1], fr->linesize[1], fr->data[2], fr->linesize[2]);
-				if (ret < 0);
-					*tcLog << SDL_GetError();
-				SDL_RenderClear(renderer);
-				SDL_RenderCopy(renderer, texture, NULL, NULL);
-				SDL_RenderPresent(renderer);
+				sws_scale(sc, fr->data, fr->linesize, 0, fr->height, pixels, linesizes);				
 				sws_freeContext(sc);
+				wxImage img(previewsize, pixels[0], true);
+				wxBitmap bmp(img);
+				wxClientDC dc(bmpPreview);
+				dc.DrawBitmap(bmp, 0, 0);
+				
 			}
 			av_freep(&pixels[0]);
 /*			

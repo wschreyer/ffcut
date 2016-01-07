@@ -26,8 +26,6 @@ extern "C" {
 #include "libavformat/avformat.h"
 #include "libswscale/swscale.h"
 #include "libavutil/imgutils.h"
-
-#include "SDL.h"
 }
 
 
@@ -56,9 +54,6 @@ class MainFrame : public MainFrameBase
 		
 	protected:
 		AVFormatContext *fc = NULL;
-		SDL_Window *window = NULL;
-		SDL_Renderer *renderer = NULL;
-		SDL_Texture *texture = NULL;
 
 		wxTimeSpan previewedPTS;
 		int64_t previewedPos;

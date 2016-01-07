@@ -14,6 +14,7 @@
 #include <wx/iconbndl.h>
 #include <wx/artprov.h>
 #include <wx/sizer.h>
+#include <wx/statbmp.h>
 #include <wx/textctrl.h>
 #include <wx/slider.h>
 #include <wx/button.h>
@@ -33,6 +34,7 @@
 class MainFrameBase : public wxFrame
 {
 protected:
+    wxStaticBitmap* bmpPreview;
     wxTextCtrl* tcLog;
     wxSlider* sdPosition;
     wxButton* btRRR;
@@ -72,6 +74,7 @@ protected:
     virtual void sbStreamorderOnSpin(wxSpinEvent& event) { event.Skip(); }
 
 public:
+    wxStaticBitmap* GetBmpPreview() { return bmpPreview; }
     wxTextCtrl* GetTcLog() { return tcLog; }
     wxSlider* GetSdPosition() { return sdPosition; }
     wxButton* GetBtRRR() { return btRRR; }
@@ -92,7 +95,7 @@ public:
     wxCheckListBox* GetClStreams() { return clStreams; }
     wxSpinButton* GetSbStreamorder() { return sbStreamorder; }
     wxStatusBar* GetSbStatus() { return sbStatus; }
-    MainFrameBase(wxWindow* parent, wxWindowID id = wxID_ANY, const wxString& title = _("ffcut"), const wxPoint& pos = wxDefaultPosition, const wxSize& size = wxSize(500,500), long style = wxDEFAULT_FRAME_STYLE|wxTAB_TRAVERSAL);
+    MainFrameBase(wxWindow* parent, wxWindowID id = wxID_ANY, const wxString& title = _("ffcut"), const wxPoint& pos = wxDefaultPosition, const wxSize& size = wxSize(600,750), long style = wxDEFAULT_FRAME_STYLE|wxTAB_TRAVERSAL);
     virtual ~MainFrameBase();
 };
 
